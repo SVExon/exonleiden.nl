@@ -34,7 +34,6 @@ class HttpUtils {
         try {
             $web_content = file_get_contents($url, false, $context);
         } catch (\ErrorException $e) {
-            echo $e;
             return null;
         }
 
