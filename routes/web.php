@@ -1,15 +1,16 @@
 <?php
 
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+|
+| This file is where you may define all of the routes that are handled
+| by your application. Just tell Laravel the URIs it should respond
+| to using a Closure or controller method. Build something great!
+|
+*/
 
 Route::get('/', function () {
-    $feed = (new \SVExon\Http\FacebookFeed())->get_feed();
-    if (isset($feed["error"])) {
-        $fake_feed = array(
-            "feed" => array(),
-            "new_uuid" => "fetch",
-            "old_uuid" => "fetch"
-        );
-        return View::make('index')->with("feed", $fake_feed);
-    }
-    return View::make('index', compact("feed"));
+    return View::make('welcome');
 });
