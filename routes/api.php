@@ -7,5 +7,5 @@ use Illuminate\Http\Request;
 //    return $request->user();
 //})->middleware('auth:api');
 
-Route::get('fb-feed-exonleiden', 'LeidenFeedController@get');
-Route::post('fb-feed-exonleiden', 'LeidenFeedController@post');
+Route::get('fb-feed', 'LeidenFeedController@get');
+Route::post('fb-feed', 'LeidenFeedController@post');

@@ -44,7 +44,9 @@ class LeidenFeedController extends Controller {
         $web_output = HttpUtils::makeRequest(self::FACEBOOK_FEED_URL, $this->url_params());
         if (isset($web_output)) {
             $web_json = json_decode($web_output, TRUE);
-            $output_json = $this->handleFeedJSON($web_json);
+            $output_json = array(
+                "feed" => $this->handleFeedJSON($web_json)
+            );
             $paging = $this->handlePaging($web_json);
             if (isset($paging)) {
                 foreach ($paging as $key => $value) {
@@ -57,12 +59,13 @@ class LeidenFeedController extends Controller {
     }
 
     public function post(Request $request) {
-        //echo $request->new_uuid;
         if ($request->exists("new_uuid") && $request->exists("old_uuid")) {
-            $objects = SafeURL::where("uuid", $request->old_uuid)->orWhere("uuid", $request->new_uuid)->get();
+            $new_uuid = urldecode($request->new_uuid);
+            $old_uuid = urldecode($request->old_uuid);
+            $objects = SafeURL::where("uuid", $old_uuid)->orWhere("uuid", $new_uuid)->get();
             if (count($objects) == 2) {
                 // Build the batch request
-                $is_new = $objects->first()->uuid == $request->new_uuid;
+                $is_new = $objects->first()->uuid == $new_uuid;
                 $new_url = parse_url($is_new ? $objects->first()->url : $objects->last()->url);
                 $old_url = parse_url($is_new ? $objects->last()->url : $objects->first()->url);
                 $batch_json = array(
@@ -90,13 +93,13 @@ class LeidenFeedController extends Controller {
                         "old" => $this->handleFeedJSON($old_json)
                     );
                     // Handle the paging
-                    $paging_new = $this->handlePaging($new_json, true, false);
+                    $paging_new = $this->handlePaging($new_json, TRUE, FALSE);
                     if (isset($paging_new)) $output_json["new_uuid"] = $paging_new["new_uuid"];
-                    else $output_json["new_uuid"] = urlencode($request->new_uuid);
+                    else $output_json["new_uuid"] = $request->new_uuid;
 
-                    $paging_old = $this->handlePaging($old_json, false, true);
+                    $paging_old = $this->handlePaging($old_json, FALSE, TRUE);
                     if (isset($paging_old)) $output_json["old_uuid"] = $paging_old["old_uuid"];
-                    else $output_json["old_uuid"] = urlencode($request->old_uuid);
+                    else $output_json["old_uuid"] = $request->old_uuid;
 
                     return json_encode($output_json);
                 }
@@ -106,14 +109,11 @@ class LeidenFeedController extends Controller {
     }
 
     private function handleFeedJSON($feed_json) {
-        ;
-        $json_object = array(
-            "feed" => array()
-        );
+        $json_object = array();
         // Collect id's and get basic information out of the feed
         $message_ids = array();
         foreach ($feed_json["data"] as $post) {
-            array_push($json_object["feed"], $post);
+            array_push($json_object, $post);
             // Collect the id for a batch request
             array_push($message_ids, array(
                 "method" => "GET",
@@ -130,18 +130,18 @@ class LeidenFeedController extends Controller {
             for ($i = 0; $i < count($attachments_json); $i++) {
                 $attachments = json_decode($attachments_json[$i]["body"], TRUE);
                 if (count($attachments["data"])) {
-                    $json_object["feed"][$i]["attachments"] = $attachments["data"];
+                    $json_object[$i]["attachments"] = $attachments["data"];
                 }
             }
         }
         return $json_object;
     }
 
-    private function handlePaging($paging_json, $return_new = true, $return_old = true) {
+    private function handlePaging($paging_json, $return_new = TRUE, $return_old = TRUE) {
         if (isset($paging_json["paging"])) {
             return array(
-                "new_uuid" => $return_new ? $this->UUIDForURL($paging_json["paging"]["next"]) : "",
-                "old_uuid" => $return_old ? $this->UUIDForURL($paging_json["paging"]["previous"]) : ""
+                "new_uuid" => $return_new ? $this->UUIDForURL($paging_json["paging"]["previous"]) : "",
+                "old_uuid" => $return_old ? $this->UUIDForURL($paging_json["paging"]["next"]) : ""
             );
         }
         return null;
@@ -155,7 +155,7 @@ class LeidenFeedController extends Controller {
             $object->url = $url;
             $object->save();
         }
-        return $object->uuid;
+        return urlencode($object->uuid);
     }
 
 }

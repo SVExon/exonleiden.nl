@@ -12,7 +12,7 @@ class CreateSafeURLsTable extends Migration {
      */
     public function up() {
         Schema::create('safe_u_r_ls', function (Blueprint $table) {
-            $table->string("uuid", 28);
+            $table->string("uuid", 45);
             $table->text("url");
         });
     }
