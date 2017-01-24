@@ -42,6 +42,16 @@ class HttpUtils {
         }
         return $web_content;
     }
+
+    static function makeJsonRequest($url, $url_params = array(), $method = self::GET, $headers = array()) {
+        $web_content = self::makeRequest($url, $url_params, $method, $headers);
+        if (isset($web_content)) {
+            return json_decode($web_content, TRUE);
+        }
+        return array();
+    }
+
+
 }
 
 

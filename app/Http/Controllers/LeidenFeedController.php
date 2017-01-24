@@ -15,7 +15,7 @@ class LeidenFeedController extends Controller {
 
     private $url_params = NULL;
 
-    private function url_params() {
+    private function urlParams() {
         if (!isset($this->url_params)) {
             $this->url_params = array(
                 "limit" => env("FACEBOOK_FEED_POSTS_PER_PAGE", 25),
@@ -29,9 +29,9 @@ class LeidenFeedController extends Controller {
         return $this->url_params;
     }
 
-    private function batch_url_params(array $batch_json) {
+    private function batchUrlParams(array $batch_json) {
         // Trigger the access token to be present
-        $this->url_params();
+        $this->urlParams();
         return array(
             "access_token" => $this->url_params["access_token"],
             "locale" => $this->url_params["locale"],
@@ -40,20 +40,44 @@ class LeidenFeedController extends Controller {
         );
     }
 
+    private function doJsonBatchRequest($format, $data) {
+        $batch_build = array();
+        foreach ($data as $single_request) {
+            $relative_url = "";
+            if (is_array($single_request)) {
+                array_unshift($single_request, $format);
+                $relative_url = call_user_func("sprintf", $single_request);
+            } else {
+                $relative_url = sprintf($format, $single_request);
+            }
+            array_push($batch_build, array(
+                "method" => "GET",
+                "relative_url" => $relative_url
+            ));
+        }
+
+        $url_params = $this->batchUrlParams($batch_build);
+        $content = HttpUtils::makeJsonRequest(self::FACEBOOK_BASE_URL, $url_params, HttpUtils::POST);
+        $decoded_array = array();
+        foreach ($content as $request) {
+            array_push($decoded_array, json_decode($request["body"], TRUE));
+        }
+        return $decoded_array;
+    }
+
     public function get() {
-        $web_output = HttpUtils::makeRequest(self::FACEBOOK_FEED_URL, $this->url_params());
-        if (isset($web_output)) {
-            $web_json = json_decode($web_output, TRUE);
+        $output = HttpUtils::makeJsonRequest(self::FACEBOOK_FEED_URL, $this->urlParams());
+        if (!empty($output)) {
             $output_json = array(
-                "feed" => $this->handleFeedJSON($web_json)
+                "feed" => $this->handleFeedJSON($output)
             );
-            $paging = $this->handlePaging($web_json);
+            $paging = $this->handlePaging($output);
             if (isset($paging)) {
                 foreach ($paging as $key => $value) {
                     $output_json[$key] = $value;
                 }
             }
-            return $output_json;
+            return response($output_json);
         }
         return self::ERROR_JSON;
     }
@@ -68,41 +92,25 @@ class LeidenFeedController extends Controller {
                 $is_new = $objects->first()->uuid == $new_uuid;
                 $new_url = parse_url($is_new ? $objects->first()->url : $objects->last()->url);
                 $old_url = parse_url($is_new ? $objects->last()->url : $objects->first()->url);
-                $batch_json = array(
-                    array(
-                        "method" => "GET",
-                        "relative_url" => $new_url["path"] . "?" . $new_url["query"]
-                    ),
-                    array(
-                        "method" => "GET",
-                        "relative_url" => $old_url["path"] . "?" . $old_url["query"]
-                    )
+
+                $response_json = $this->doJsonBatchRequest("%s?%s", array(
+                    array($new_url["path"], $new_url["query"]),
+                    array($old_url["path"], $old_url["query"])
+                ));
+                // Merge the feeds into a single object
+                $output_json = array(
+                    "new" => $this->handleFeedJSON($response_json[0]),
+                    "old" => $this->handleFeedJSON($response_json[1])
                 );
+                // Handle the paging
+                $paging_new = $this->handlePaging($response_json[0], TRUE, FALSE);
+                if (isset($paging_new)) $output_json["new_uuid"] = $paging_new["new_uuid"];
+                else $output_json["new_uuid"] = $request->new_uuid;
 
-                $url_params = $this->batch_url_params($batch_json);
-                // Handle the response
-                $response_json = HttpUtils::makeRequest(self::FACEBOOK_BASE_URL, $url_params, HttpUtils::POST);
-                if (isset($response_json)) {
-                    $response_json = json_decode($response_json, TRUE);
-                    $new_json = json_decode($response_json[0]["body"], TRUE);
-                    $old_json = json_decode($response_json[1]["body"], TRUE);
-                    unset($response_json);
-                    // Merge the feeds into a single object
-                    $output_json = array(
-                        "new" => $this->handleFeedJSON($new_json),
-                        "old" => $this->handleFeedJSON($old_json)
-                    );
-                    // Handle the paging
-                    $paging_new = $this->handlePaging($new_json, TRUE, FALSE);
-                    if (isset($paging_new)) $output_json["new_uuid"] = $paging_new["new_uuid"];
-                    else $output_json["new_uuid"] = $request->new_uuid;
-
-                    $paging_old = $this->handlePaging($old_json, FALSE, TRUE);
-                    if (isset($paging_old)) $output_json["old_uuid"] = $paging_old["old_uuid"];
-                    else $output_json["old_uuid"] = $request->old_uuid;
-
-                    return json_encode($output_json);
-                }
+                $paging_old = $this->handlePaging($response_json[1], FALSE, TRUE);
+                if (isset($paging_old)) $output_json["old_uuid"] = $paging_old["old_uuid"];
+                else $output_json["old_uuid"] = $request->old_uuid;
+                return response(json_encode($output_json));
             }
         }
         return self::ERROR_JSON;
@@ -115,22 +123,16 @@ class LeidenFeedController extends Controller {
         foreach ($feed_json["data"] as $post) {
             array_push($json_object, $post);
             // Collect the id for a batch request
-            array_push($message_ids, array(
-                "method" => "GET",
-                "relative_url" => $post["id"] . "/attachments"
-            ));
+            array_push($message_ids, $post["id"]);
         }
         // Release the earlier feed, as we don't need it
         unset($feed_json);
         if (!empty($message_ids)) {
-            // Do the batch request
-            $url_params = $this->batch_url_params($message_ids);
-            $attachments_json = json_decode(HttpUtils::makeRequest(self::FACEBOOK_BASE_URL, $url_params, HttpUtils::POST),
-                TRUE);
+
+            $attachments_json = $this->doJsonBatchRequest("%s/attachments", $message_ids);
             for ($i = 0; $i < count($attachments_json); $i++) {
-                $attachments = json_decode($attachments_json[$i]["body"], TRUE);
-                if (count($attachments["data"])) {
-                    $json_object[$i]["attachments"] = $attachments["data"];
+                if (count($attachments_json[$i]["data"])) {
+                    $json_object[$i]["attachments"] = $attachments_json[$i]["data"];
                     $this->handleAttachments($json_object[$i]["attachments"]);
                 }
             }
@@ -139,28 +141,21 @@ class LeidenFeedController extends Controller {
     }
 
     private function handleAttachments(array &$attachments) {
-        $batch_build = array();
         $event_id_map = array();
         for ($i = 0; $i < count($attachments); $i++) {
             if($attachments[$i]["type"] == "event") {
                 $event_id = array();
                 preg_match("(\d+)", $attachments[$i]["url"], $event_id);
-                array_push($batch_build, array(
-                    "method" => "GET",
-                    "relative_url" => $event_id[0] . "?fields=start_time,end_time"
-                ));
                 $event_id_map[$event_id[0]] = $i;
             }
         }
         // Check if we even have requests
-        if (!empty($batch_build)) {
-            $url_params = $this->batch_url_params($batch_build);
-            $event_times = json_decode(HttpUtils::makeRequest(self::FACEBOOK_BASE_URL, $url_params, HttpUtils::POST), TRUE);
+        if (!empty($event_id_map)) {
+            $event_times = $this->doJsonBatchRequest("%s?fields=start_time,end_time", array_keys($event_id_map));
             foreach ($event_times as $event_time) {
-                $event_json = json_decode($event_time["body"], TRUE);
-                $id = $event_json["id"];
-                $attachments[$event_id_map[$id]]["start_time"] = $event_json["start_time"];
-                $attachments[$event_id_map[$id]]["end_time"] = $event_json["end_time"];
+                $id = $event_time["id"];
+                $attachments[$event_id_map[$id]]["start_time"] = $event_time["start_time"];
+                $attachments[$event_id_map[$id]]["end_time"] = $event_time["end_time"];
             }
         }
     }
