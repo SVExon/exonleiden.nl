@@ -29,7 +29,7 @@ class LeidenFeedController extends Controller {
         return $this->url_params;
     }
 
-    private function batch_url_params($batch_json) {
+    private function batch_url_params(array $batch_json) {
         // Trigger the access token to be present
         $this->url_params();
         return array(
@@ -108,7 +108,7 @@ class LeidenFeedController extends Controller {
         return self::ERROR_JSON;
     }
 
-    private function handleFeedJSON($feed_json) {
+    private function handleFeedJSON(array $feed_json) {
         $json_object = array();
         // Collect id's and get basic information out of the feed
         $message_ids = array();
@@ -131,10 +131,38 @@ class LeidenFeedController extends Controller {
                 $attachments = json_decode($attachments_json[$i]["body"], TRUE);
                 if (count($attachments["data"])) {
                     $json_object[$i]["attachments"] = $attachments["data"];
+                    $this->handleAttachments($json_object[$i]["attachments"]);
                 }
             }
         }
         return $json_object;
+    }
+
+    private function handleAttachments(array &$attachments) {
+        $batch_build = array();
+        $event_id_map = array();
+        for ($i = 0; $i < count($attachments); $i++) {
+            if($attachments[$i]["type"] == "event") {
+                $event_id = array();
+                preg_match("(\d+)", $attachments[$i]["url"], $event_id);
+                array_push($batch_build, array(
+                    "method" => "GET",
+                    "relative_url" => $event_id[0] . "?fields=start_time,end_time"
+                ));
+                $event_id_map[$event_id[0]] = $i;
+            }
+        }
+        // Check if we even have requests
+        if (!empty($batch_build)) {
+            $url_params = $this->batch_url_params($batch_build);
+            $event_times = json_decode(HttpUtils::makeRequest(self::FACEBOOK_BASE_URL, $url_params, HttpUtils::POST), TRUE);
+            foreach ($event_times as $event_time) {
+                $event_json = json_decode($event_time["body"], TRUE);
+                $id = $event_json["id"];
+                $attachments[$event_id_map[$id]]["start_time"] = $event_json["start_time"];
+                $attachments[$event_id_map[$id]]["end_time"] = $event_json["end_time"];
+            }
+        }
     }
 
     private function handlePaging($paging_json, $return_new = TRUE, $return_old = TRUE) {
