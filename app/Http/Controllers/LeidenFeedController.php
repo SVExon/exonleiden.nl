@@ -151,11 +151,12 @@ class LeidenFeedController extends Controller {
         }
         // Check if we even have requests
         if (!empty($event_id_map)) {
-            $event_times = $this->doJsonBatchRequest("%s?fields=start_time,end_time", array_keys($event_id_map));
+            $event_times = $this->doJsonBatchRequest("%s?fields=start_time,end_time,place",
+                                                     array_keys($event_id_map));
             foreach ($event_times as $event_time) {
                 $id = $event_time["id"];
-                $attachments[$event_id_map[$id]]["start_time"] = $event_time["start_time"];
-                $attachments[$event_id_map[$id]]["end_time"] = $event_time["end_time"];
+                unset($event_time["id"]);
+                $attachments[$event_id_map[$id]]["event"] = $event_time;
             }
         }
     }
