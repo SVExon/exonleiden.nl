@@ -50,20 +50,50 @@ function feedHandlePosts(feed, isNew) {
             return feedHandlePost(post);
         });
     });
+    container.children().click(function() {
+        var url = "https://www.facebook.com/" + $(this).attr("id");
+        window.open(url);
+    });
 }
 
 function feedHandlePost(post) {
     var divPost = $('<div></div>')
         .attr("id", post.id)
         .append(getDateElement(post.created_time));
+    if (post.story) divPost.append(getGenericParagraph(post.story, "title"));
+    if (post.message) {
+        var messageDiv = $("<div></div>").addClass("message");
+        var messages = post.message.split("\n");
+        $.each(messages, function() {
+            if (this.trim().length > 0) {
+                messageDiv.append(getGenericParagraph(this));
+            }
+        });
+        divPost.append(messageDiv);
+    }
+    if (post.attachments) handleAttachments(divPost, post.attachments);
     return divPost;
+}
+
+function getGenericParagraph(content, clss) {
+    var element = $("<p></p>").text(content);
+    if (clss) {
+        element.addClass(clss);
+    }
+    return element;
 }
 
 function getDateElement(date) {
     var parsedDate = moment(date);
     var yearDisplay = moment().year() == parsedDate.year() ? "" : "YYYY ";
     var timeText = parsedDate.format("D MMMM " + yearDisplay + "{0} hh:mm");
-    return $("<p>" + timeText.format("om") + "</p>").addClass("time");
+    return getGenericParagraph(timeText.format("om"), "time");
+}
+
+function handleAttachments(container, attachments) {
+    $.each(attachments, function() {
+
+    });
 }
 
 $(document).ready(function() {
