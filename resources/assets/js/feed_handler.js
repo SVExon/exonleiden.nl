@@ -10,6 +10,10 @@ if (!String.prototype.format) {
 }
 
 var requestParameters = null;
+const ATTACHMENT_HANDLERS = {
+    "album": handleAlbum,
+    "event": handleEvent
+};
 
 function pagination(object) {
     var container = $("#postContainer");
@@ -77,10 +81,24 @@ function feedHandlePost(post) {
 
 function getGenericParagraph(content, clss) {
     var element = $("<p></p>").text(content);
-    if (clss) {
-        element.addClass(clss);
-    }
+    if (clss) element.addClass(clss);
     return element;
+}
+
+function createImage(attachment) {
+    if (attachment.media && attachment.media.image) {
+        var img = $("<img/>");
+        $.each(attachment.media.image, function(idx, value) {
+            img.attr(idx, value);
+        });
+        if (attachment.target) {
+            img.click(function(e) {
+                e.stopPropagation();
+                window.open(attachment.target.url);
+            });
+        }
+        return img;
+    }
 }
 
 function getDateElement(date) {
@@ -91,9 +109,32 @@ function getDateElement(date) {
 }
 
 function handleAttachments(container, attachments) {
+    var attachmentsDiv = $("<div class='attachments'></div>");
     $.each(attachments, function() {
-
+        var attachmentContainer = $("<div class='attachment'></div>");
+        if (ATTACHMENT_HANDLERS[this.type]) {
+            ATTACHMENT_HANDLERS[this.type](attachmentContainer, this);
+        } else {
+            // Add an image, if available
+            var img = createImage(this);
+            if (img) attachmentContainer.append(img);
+        }
+        attachmentsDiv.append(attachmentContainer);
     });
+    container.append(attachmentsDiv);
+}
+
+function handleEvent(container, attachment) {
+
+}
+
+function handleAlbum(container, attachment) {
+    // TODO: slideshow
+    if (attachment.subattachments && attachment.subattachments.data) {
+        $.each(attachment.subattachments.data, function() {
+            container.append(createImage(this));
+        });
+    }
 }
 
 $(document).ready(function() {

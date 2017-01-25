@@ -144,9 +144,8 @@ class LeidenFeedController extends Controller {
         $event_id_map = array();
         for ($i = 0; $i < count($attachments); $i++) {
             if($attachments[$i]["type"] == "event") {
-                $event_id = array();
-                preg_match("(\d+)", $attachments[$i]["url"], $event_id);
-                $event_id_map[$event_id[0]] = $i;
+                $event_id = $attachments[$i]["target"]["id"];
+                $event_id_map[$event_id] = $i;
             }
         }
         // Check if we even have requests
