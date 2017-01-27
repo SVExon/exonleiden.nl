@@ -104,7 +104,7 @@ function createImage(attachment) {
 function getDateElement(date) {
     var parsedDate = moment(date);
     var yearDisplay = moment().year() == parsedDate.year() ? "" : "YYYY ";
-    var timeText = parsedDate.format("D MMMM " + yearDisplay + "{0} hh:mm");
+    var timeText = parsedDate.format("D MMMM " + yearDisplay + "{0} HH:mm");
     return getGenericParagraph(timeText.format("om"), "time");
 }
 

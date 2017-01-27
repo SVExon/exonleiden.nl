@@ -1,5 +1,8 @@
 @import url('https://fonts.googleapis.com/css?family=Quicksand')
 
+$nav_color: black//#0237C7
+$nav_highlight: white//#789BFC
+
 @keyframes study_store_disappear
   from
     right: 0
@@ -16,7 +19,7 @@ body
 nav
   z-index: 9999
   width: 100%
-  background-color: black
+  background-color: $nav_color //black
 
   ul
     list-style: none
@@ -25,7 +28,7 @@ nav
 
     li
       display: inline-block
-      color: white
+      //color: white
       font-family: 'Quicksand', sans-serif
       font-size: 1.5em
       text-transform: uppercase
@@ -40,10 +43,10 @@ nav
         text-decoration: none
 
       &.active, &:not(.active):not(.symbol):hover
-        border-top: 6px solid white
+        border-top: 6px solid $nav_highlight
 
       &:not(.active)
-        border-top: 6px solid black
+        border-top: 6px solid $nav_color
 
       &.symbol
         padding: 0 5px
