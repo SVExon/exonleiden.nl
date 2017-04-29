@@ -4,6 +4,11 @@ namespace SVExon;
 
 use Illuminate\Database\Eloquent\Model;
 
-class SafeURL extends Model {
+/**
+ * SVExon\StringUuid
+ *
+ * @mixin \Eloquent
+ */
+class StringUuid extends Model {
     public $timestamps = false;
 }

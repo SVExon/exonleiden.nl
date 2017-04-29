@@ -1,19 +1,19 @@
 <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Migrations\Migration;
 
-class CreateSafeURLsTable extends Migration {
+class StringUuid extends Migration {
     /**
      * Run the migrations.
      *
      * @return void
      */
     public function up() {
-        Schema::create('safe_u_r_ls', function (Blueprint $table) {
+        Schema::create('string_uuids', function (Blueprint $table) {
             $table->string("uuid", 45);
-            $table->text("url");
+            $table->text("string");
         });
     }
 
@@ -23,6 +23,6 @@ class CreateSafeURLsTable extends Migration {
      * @return void
      */
     public function down() {
-        Schema::dropIfExists('safe_u_r_ls');
+        Schema::dropIfExists('string_uuids');
     }
 }

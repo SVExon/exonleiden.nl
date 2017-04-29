@@ -25,14 +25,11 @@ class HttpUtils {
                 "method" => strtoupper($method)
             )
         );
-        // Add url parameters if available
-        if (!empty($url_params)) {
-            $url .= "?" . http_build_query($url_params);
-        }
         // Do the request
         $context = stream_context_create($request_options);
+
         try {
-            $web_content = file_get_contents($url, false, $context);
+            $web_content = file_get_contents(self::buildURL($url, $url_params), false, $context);
         } catch (\ErrorException $e) {
             return null;
         }
@@ -41,6 +38,11 @@ class HttpUtils {
             return null;
         }
         return $web_content;
+    }
+
+    static function buildURL($url, $url_params) {
+        if (!empty($url_params)) return $url . "?" . http_build_query($url_params);
+        return $url;
     }
 
     static function makeJsonRequest($url, $url_params = array(), $method = self::GET, $headers = array()) {

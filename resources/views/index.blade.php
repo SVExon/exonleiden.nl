@@ -37,7 +37,7 @@
             </label>
         </div>
         <div id="scrollAbove">
-            {{--<div id="postContainer"></div>--}}
+            <div id="postContainer"></div>
             {{--<footer>--}}
                 {{--<p>Background provided by <a href="https://subtlepatterns.com/page/12/">Devin Holmes</a></p>--}}
             {{--</footer>--}}

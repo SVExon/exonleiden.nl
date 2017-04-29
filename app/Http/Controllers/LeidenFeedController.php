@@ -4,12 +4,12 @@ namespace SVExon\Http\Controllers;
 
 use Illuminate\Http\Request;
 use SVExon\Http\HttpUtils;
-use SVExon\SafeURL;
+use SVExon\StringUuid;
 
 
 class LeidenFeedController extends Controller {
 
-    const FACEBOOK_BASE_URL = "https://graph.facebook.com/v2.8";
+    const FACEBOOK_BASE_URL = "https://graph.facebook.com/v2.9";
     const FACEBOOK_FEED_URL = self::FACEBOOK_BASE_URL . "/exonleiden/feed";
     const ERROR_JSON = "{\"error\": \"Failed connection\"}";
 
@@ -84,34 +84,28 @@ class LeidenFeedController extends Controller {
 
     public function post(Request $request) {
         if ($request->exists("new_uuid") && $request->exists("old_uuid")) {
-            $new_uuid = urldecode($request->new_uuid);
-            $old_uuid = urldecode($request->old_uuid);
-            $objects = SafeURL::where("uuid", $old_uuid)->orWhere("uuid", $new_uuid)->get();
-            if (count($objects) == 2) {
-                // Build the batch request
-                $is_new = $objects->first()->uuid == $new_uuid;
-                $new_url = parse_url($is_new ? $objects->first()->url : $objects->last()->url);
-                $old_url = parse_url($is_new ? $objects->last()->url : $objects->first()->url);
+            $new_url = parse_url($this->getPaginationUrl(urldecode($request->new_uuid), "before"));
+            $old_url = parse_url($this->getPaginationUrl(urldecode($request->old_uuid), "after"));
 
-                $response_json = $this->doJsonBatchRequest("%s?%s", array(
-                    array($new_url["path"], $new_url["query"]),
-                    array($old_url["path"], $old_url["query"])
-                ));
-                // Merge the feeds into a single object
-                $output_json = array(
-                    "new" => $this->handleFeedJSON($response_json[0]),
-                    "old" => $this->handleFeedJSON($response_json[1])
-                );
-                // Handle the paging
-                $paging_new = $this->handlePaging($response_json[0], TRUE, FALSE);
-                if (isset($paging_new)) $output_json["new_uuid"] = $paging_new["new_uuid"];
-                else $output_json["new_uuid"] = $request->new_uuid;
+            $response_json = $this->doJsonBatchRequest("%s?%s", array(
+                array($new_url["path"], $new_url["query"]),
+                array($old_url["path"], $old_url["query"])
+            ));
+            // Merge the feeds into a single object
+            $output_json = array(
+                "new" => $this->handleFeedJSON($response_json[0]),
+                "old" => $this->handleFeedJSON($response_json[1])
+            );
 
-                $paging_old = $this->handlePaging($response_json[1], FALSE, TRUE);
-                if (isset($paging_old)) $output_json["old_uuid"] = $paging_old["old_uuid"];
-                else $output_json["old_uuid"] = $request->old_uuid;
-                return response(json_encode($output_json));
-            }
+            // Handle the paging
+            $paging_new = $this->handlePaging($response_json[0], TRUE, FALSE);
+            if (isset($paging_new)) $output_json["new_uuid"] = $paging_new["new_uuid"];
+            else $output_json["new_uuid"] = $request->new_uuid;
+
+            $paging_old = $this->handlePaging($response_json[1], FALSE, TRUE);
+            if (isset($paging_old)) $output_json["old_uuid"] = $paging_old["old_uuid"];
+            else $output_json["old_uuid"] = $request->old_uuid;
+            return response(json_encode($output_json));
         }
         return self::ERROR_JSON;
     }
@@ -128,7 +122,6 @@ class LeidenFeedController extends Controller {
         // Release the earlier feed, as we don't need it
         unset($feed_json);
         if (!empty($message_ids)) {
-
             $attachments_json = $this->doJsonBatchRequest("%s/attachments", $message_ids);
             for ($i = 0; $i < count($attachments_json); $i++) {
                 if (count($attachments_json[$i]["data"])) {
@@ -162,20 +155,31 @@ class LeidenFeedController extends Controller {
 
     private function handlePaging($paging_json, $return_new = TRUE, $return_old = TRUE) {
         if (isset($paging_json["paging"])) {
+            $cursor = $paging_json["paging"]["cursors"];
             return array(
-                "new_uuid" => $return_new ? $this->UUIDForURL($paging_json["paging"]["previous"]) : "",
-                "old_uuid" => $return_old ? $this->UUIDForURL($paging_json["paging"]["next"]) : ""
+                "new_uuid" => $return_new ? $this->getUUID4String($cursor["before"]) : "",
+                "old_uuid" => $return_old ? $this->getUUID4String($cursor["after"]) : ""
             );
         }
         return null;
     }
 
-    private function UUIDForURL($url) {
-        $object = SafeURL::all()->where("url", $url)->first();
+    private function getPaginationUrl($pagination_uuid, $key) {
+        $object = StringUuid::where("uuid", $pagination_uuid, $key);
+        if (isset($object)) {
+            $url_params = $this->urlParams();
+            $url_params[$key] = $object->text;
+            return HttpUtils::buildURL(self::FACEBOOK_FEED_URL, $url_params);
+        }
+        return false;
+    }
+
+    private function getUUID4String($str) {
+        $object = StringUuid::all()->where("string", $str)->first();
         if (!isset($object)) {
-            $object = new SafeURL;
+            $object = new StringUuid;
             $object->uuid = base64_encode(openssl_random_pseudo_bytes(20));
-            $object->url = $url;
+            $object->string = $str;
             $object->save();
         }
         return urlencode($object->uuid);
